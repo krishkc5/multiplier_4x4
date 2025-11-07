@@ -131,7 +131,7 @@ Multiple staircases (such as CP$_1$ and CP$_2$ in the figure) have the same hop 
 
 \begin{figure}[h]
   \centering
-  \includegraphics[width=0.95\linewidth]{writeup/figures/staticcmos_fa_rabaey.png}
+  \includegraphics[width=0.95\linewidth]{writeup/figures/staticcmos_fa_rabaey_annotated.png}
   \caption{Complementary static-CMOS full adder. Figure adapted from Rabaey.}
 \end{figure}
 
@@ -212,6 +212,212 @@ Implementation in complementary static CMOS is therefore direct:
 \noindent
 Unlike the full adder, there is no third input to exploit for algebraic sharing or logic reorganization; the minimal Boolean forms are already $A \oplus B$ and $A \cdot B$. Consequently, the “optimized” static-CMOS HA coincides with the baseline bag-of-gates realization: one XOR stage for Sum and a NAND+inverter pair for Carry. This keeps logic depth minimal for each output while retaining the robustness advantages of static CMOS (rail-to-rail levels, large noise margins, and predictable cascading behavior in the multiplier array).
 
+\subsection{Optimizing Gate Sizes Along CP1}
+
+\paragraph{Design variables and device mapping.}
+We size five gate types with continuous, positive scale factors
+\[
+k_{\text{nand}},\;k_{\text{inv}},\;k_{\text{fa1}},\;k_{\text{fa2}},\;k_{\text{xor}}>0.
+\]
+For the \textbf{NAND} gate, both PMOS and NMOS widths equal $k_{\text{nand}}$.
+For the \textbf{INV}, \textbf{FA Stage~1}, \textbf{FA Stage~2}, and \textbf{XOR}, the PMOS width is $2k$ and the NMOS width is $k$, where $k$ is the corresponding scale ($k_{\text{inv}}$, $k_{\text{fa1}}$, $k_{\text{fa2}}$, $k_{\text{xor}}$).
+
+\paragraph{Assumptions and units.}
+We assume: (i) diffusion capacitances are neglected ($C_d=0$);
+(ii) all inputs are driven by a minimum-size inverter; (iii) pull-up resistance $R_{\!up}=2R_{\!un}$;
+(iv) the final output load is $10C_g$. We measure delay in units of $R_{\!un}C_g$; i.e., we factor out the common multiplier $R_{\!un}C_g$ from every $R_i C_j$ product.
+
+\paragraph{Definition of CP1.}
+The critical path instance CP1 crosses the following gate sequence:
+\[
+\begin{aligned}
+&\text{AND }(\text{NAND}+\text{INV});\ 
+\text{HA,carry }(\text{NAND}+\text{INV});\
+\text{FA,carry }(\text{FA1}+\text{INV});\
+\text{FA,carry }(\text{FA1}+\text{INV});\\
+&\text{HA,sum }(\text{INV}+\text{XOR});\
+\text{FA,carry }(\text{FA1}+\text{INV});\
+\text{FA,sum }(\text{FA1}+\text{FA2}+\text{INV});\\
+&\text{FA,carry }(\text{FA1}+\text{INV});\
+\text{FA,sum }(\text{FA1}+\text{FA2}+\text{INV}).
+\end{aligned}
+\]
+
+\paragraph{Step-by-step RC model (21 steps).}
+Let $(R_i, C_i)$ denote the driving resistance and the load capacitance of step $i$ on CP1, each expressed in the normalized units described above. Using the worst-case edge per step you specified:
+
+\[
+\begin{aligned}
+R_1&=2,                      & C_1&=2k_{\text{nand}}, \\
+R_2&=\frac{2}{k_{\text{nand}}}, & C_2&=3k_{\text{inv}}, \\
+R_3&=\frac{2}{k_{\text{inv}}},   & C_3&=2k_{\text{nand}}, \\
+R_4&=\frac{2}{k_{\text{nand}}}, & C_4&=3k_{\text{inv}}, \\
+R_5&=\frac{2}{k_{\text{inv}}},   & C_5&=6k_{\text{fa1}}, \\
+R_6&=\frac{6}{k_{\text{fa1}}},   & C_6&=3k_{\text{inv}}+3k_{\text{fa1}}, \\
+R_7&=\frac{2}{k_{\text{inv}}},   & C_7&=6k_{\text{fa1}}, \\
+R_8&=\frac{6}{k_{\text{fa1}}},   & C_8&=3k_{\text{inv}}+3k_{\text{fa1}}, \\
+R_9&=\frac{2}{k_{\text{inv}}},   & C_9&=3k_{\text{inv}}, \\
+R_{10}&=\frac{2}{k_{\text{inv}}},& C_{10}&=3k_{\text{xor}}, \\
+R_{11}&=\frac{4}{k_{\text{xor}}},& C_{11}&=6k_{\text{fa1}}, \\
+R_{12}&=\frac{6}{k_{\text{fa1}}},& C_{12}&=3k_{\text{inv}}+3k_{\text{fa1}}, \\
+R_{13}&=\frac{2}{k_{\text{inv}}},& C_{13}&=6k_{\text{fa1}}, \\
+R_{14}&=\frac{6}{k_{\text{fa1}}},& C_{14}&=3k_{\text{inv}}+3k_{\text{fa1}}, \\
+R_{15}&=\frac{4}{k_{\text{fa2}}},& C_{15}&=3k_{\text{inv}}, \\
+R_{16}&=\frac{2}{k_{\text{inv}}},& C_{16}&=6k_{\text{fa1}}, \\
+R_{17}&=\frac{6}{k_{\text{fa1}}},& C_{17}&=3k_{\text{inv}}+3k_{\text{fa1}}, \\
+R_{18}&=\frac{2}{k_{\text{inv}}},& C_{18}&=6k_{\text{fa1}}, \\
+R_{19}&=\frac{6}{k_{\text{fa1}}},& C_{19}&=3k_{\text{inv}}+3k_{\text{fa2}}, \\
+R_{20}&=\frac{4}{k_{\text{fa2}}},& C_{20}&=3k_{\text{inv}}, \\
+R_{21}&=\frac{2}{k_{\text{inv}}},& C_{21}&=10. \\
+\end{aligned}
+\]
+
+\paragraph{Elmore delay objective.}
+Let the cumulative resistance up to step $i$ be
+\[
+S_i \;\triangleq\; \sum_{j=1}^{i} R_j.
+\]
+The Elmore delay along CP1 is
+\[
+\tau(k_{\text{nand}},k_{\text{inv}},k_{\text{fa1}},k_{\text{fa2}},k_{\text{xor}})
+= \sum_{i=1}^{21} S_i\,C_i.
+\]
+By construction, $\tau$ is homogeneous in the time unit $R_{\!un}C_g$.
+
+\paragraph{Structure of the derivatives.}
+Each $R_i$ is either constant or of the form $\alpha_i/x$ for a single sizing variable $x\in
+\{k_{\text{nand}},k_{\text{inv}},k_{\text{fa1}},k_{\text{fa2}},k_{\text{xor}}\}$; each $C_i$ is either constant or of the form $\beta_i x$ or a sum of such linear terms. Hence
+\[
+\frac{\partial R_i}{\partial x}=
+\begin{cases}
+-\dfrac{\alpha_i}{x^2}, & \text{if } R_i=\dfrac{\alpha_i}{x},\\[6pt]
+0, & \text{otherwise},
+\end{cases}
+\qquad
+\frac{\partial C_i}{\partial x}=
+\begin{cases}
+\beta_i, & \text{if } C_i\text{ contains }\beta_i x,\\[3pt]
+0, & \text{otherwise}.
+\end{cases}
+\]
+Using $S_i=\sum_{j\le i}R_j$, its derivative satisfies
+\[
+\frac{\partial S_i}{\partial x}=\sum_{j=1}^{i}\frac{\partial R_j}{\partial x}.
+\]
+Therefore the gradient components are
+\[
+\boxed{\quad
+\frac{\partial \tau}{\partial x}
+= \sum_{i=1}^{21}\left(\frac{\partial S_i}{\partial x}\,C_i
++ S_i\,\frac{\partial C_i}{\partial x}\right)
+= \sum_{i=1}^{21}\left(\sum_{j=1}^i \frac{\partial R_j}{\partial x}\right)C_i
++ \sum_{i=1}^{21} S_i\,\frac{\partial C_i}{\partial x}.
+\quad}
+\]
+
+\paragraph{Coefficient bookkeeping per variable.}
+For compactness, we list the steps that contribute to each variable’s partial derivative, with their coefficients $(\alpha,\beta)$:
+
+\begin{itemize}
+\item \textbf{$x=k_{\text{nand}}$:}
+\[
+\begin{aligned}
+&\text{Resistance terms: } R_2=\tfrac{2}{k_{\text{nand}}},\ R_4=\tfrac{2}{k_{\text{nand}}}
+\ \Rightarrow\ \alpha_{2}=\alpha_{4}=2;\\
+&\text{Capacitance terms: } C_1=2k_{\text{nand}},\ C_3=2k_{\text{nand}}
+\ \Rightarrow\ \beta_{1}=\beta_{3}=2.
+\end{aligned}
+\]
+
+\item \textbf{$x=k_{\text{inv}}$:}
+\[
+\begin{aligned}
+&\text{Resistance: } R_3,R_5,R_7,R_9,R_{10},R_{13},R_{16},R_{18},R_{21}
+= \tfrac{2}{k_{\text{inv}}}\ \Rightarrow\ \alpha=2\ \text{at those indices};\\
+&\text{Capacitance: } C_2,C_4,C_6,C_8,C_9,C_{12},C_{14},C_{15},C_{17},C_{19},C_{20}
+= 3k_{\text{inv}}\ \Rightarrow\ \beta=3\ \text{at those indices}.
+\end{aligned}
+\]
+
+\item \textbf{$x=k_{\text{fa1}}$:}
+\[
+\begin{aligned}
+&\text{Resistance: } R_6,R_8,R_{12},R_{14},R_{17},R_{19}=\tfrac{6}{k_{\text{fa1}}}
+\ \Rightarrow\ \alpha=6\ \text{at those indices};\\
+&\text{Capacitance: } C_5,C_7,C_{11},C_{13},C_{16},C_{18}=6k_{\text{fa1}},\\
+&\hspace*{25mm}
+C_6,C_8,C_{12},C_{14},C_{17},C_{19}\ \text{contain }3k_{\text{fa1}}
+\ \Rightarrow\ \beta=6\ \text{or }3\ \text{accordingly}.
+\end{aligned}
+\]
+
+\item \textbf{$x=k_{\text{fa2}}$:}
+\[
+\begin{aligned}
+&\text{Resistance: } R_{15},R_{20}=\tfrac{4}{k_{\text{fa2}}}
+\ \Rightarrow\ \alpha=4\ \text{at }15,20;\\
+&\text{Capacitance: } C_{19}=3k_{\text{fa2}}
+\ \Rightarrow\ \beta_{19}=3.
+\end{aligned}
+\]
+
+\item \textbf{$x=k_{\text{xor}}$:}
+\[
+\text{Resistance: } R_{11}=\tfrac{4}{k_{\text{xor}}}\ (\alpha_{11}=4),\qquad
+\text{Capacitance: } C_{10}=3k_{\text{xor}}\ (\beta_{10}=3).
+\]
+\end{itemize}
+
+\paragraph{Stationarity conditions.}
+At the unconstrained interior optimum (all $k>0$), the first-order conditions are
+\[
+\frac{\partial \tau}{\partial k_{\text{nand}}}=0,\quad
+\frac{\partial \tau}{\partial k_{\text{inv}}}=0,\quad
+\frac{\partial \tau}{\partial k_{\text{fa1}}}=0,\quad
+\frac{\partial \tau}{\partial k_{\text{fa2}}}=0,\quad
+\frac{\partial \tau}{\partial k_{\text{xor}}}=0.
+\]
+Expanding each with the lists above yields five nonlinear equations:
+\[
+\boxed{\;
+\sum_{i=1}^{21}\Big(\sum_{j=1}^{i} \partial R_j/\partial x\Big)C_i
+\;+\;\sum_{i=1}^{21} S_i\,\partial C_i/\partial x \;=\;0,
+\qquad x\in\{k_{\text{nand}},k_{\text{inv}},k_{\text{fa1}},k_{\text{fa2}},k_{\text{xor}}\}.
+\;}
+\]
+Concretely, for $x=k_{\text{nand}}$,
+\[
+\frac{\partial \tau}{\partial k_{\text{nand}}}
+=\sum_{i=1}^{21}\!\Bigg(\sum_{j=1}^i\!\left[-\frac{2}{k_{\text{nand}}^2}\,\mathbb{1}_{\{j=2,4\}}\right]\!\Bigg) C_i
+\;+\; \sum_{i=1}^{21}\! S_i\,(2\,\mathbb{1}_{\{i=1,3\}})
+=0,
+\]
+and analogous expressions hold for the other variables by substituting their contributing indices and coefficients.
+
+\paragraph{Numerical solution and improvement.}
+Solving the five stationarity equations simultaneously for the positive real solution gives the following optimum (continuous sizes, in the normalized units above):
+\[
+\boxed{
+\begin{aligned}
+k_{\text{nand}}&\approx 8.27,\quad
+k_{\text{inv}}\approx 1.62,\quad
+k_{\text{fa1}}\approx 1.79,\\
+k_{\text{fa2}}&\approx 1.62,\quad
+k_{\text{xor}}\approx 3.15.
+\end{aligned}}
+\]
+With all $k=1$ (baseline), the Elmore delay along CP1 evaluates to
+\[
+\tau_{\text{base}} \;=\; 4054\ \big[R_{\!un}C_g\big].
+\]
+At the optimum,
+\[
+\tau^\* \;=\; 3618.8\ \big[R_{\!un}C_g\big],
+\]
+which is an \textbf{approx.\ 10.8\%} reduction in the CP1 Elmore constant under the stated assumptions.
+
+\paragraph{Interpretation.}
+The optimizer increases $k_{\text{nand}}$ substantially (NANDs appear early and repeatedly), raises $k_{\text{xor}}$ to avoid starving step~11, and keeps the late-stage drivers ($k_{\text{inv}}$, $k_{\text{fa1}}$, $k_{\text{fa2}}$) moderately above unity to balance the large downstream loads, especially the final $10C_g$. The stationarity equations enforce near-equalized per-stage effort over the 21-step chain, preventing the tail (steps 16--21) from dominating while also avoiding excessive upsizing that would inflate upstream capacitive loads.
 
 
 \newpage
