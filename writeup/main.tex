@@ -42,6 +42,7 @@
 
 % ----------------------------------------------------
 \section{Baseline Functional Verification}
+\label{sec:functional_verification}
 
 To verify the correctness of both the baseline and optimized 4$\times$4 multiplier implementations, we built a fully exhaustive, self-checking testbench around the transistor-level schematic. The testbench (1) applies all $2^8 = 256$ possible input combinations to the multiplier, (2) samples the eight output bits only after they have settled, and (3) automatically checks that every sampled output word matches the ideal product $Z = X \cdot Y$.
 
@@ -60,7 +61,7 @@ $X_3$: period $8T$,                  & $Y_3$: period $128T$
 
 With a 50\% duty cycle on each bit, this configuration causes the eight inputs to count through all binary patterns from 0 to 255. Over a total simulation time of $1.28\,\mu\mathrm{s} = 128T$, the testbench therefore applies every possible unsigned input pair $(X,Y)$ with $X,Y \in [0,15]$. The corresponding Cadence waveform capture is shown in Fig.~\ref{fig:baseline_signals}, where the lower traces are the input bits and the upper traces are the multiplier outputs $Z_0$–$Z_7$.
 
-\begin{figure}[H]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{writeup/figures/baseline_verification_signals.png}
   \caption{Transient response of the 4$\times$4 multiplier under exhaustive binary-count stimulus. The eight input bits form a hardware counter, and the eight output bits respond to each new input vector.}
@@ -112,7 +113,7 @@ To make the results easy to interpret at a glance, a final Python script convert
   \item The cell background is colored green if these two numbers agree and red otherwise.
 \end{itemize}
 
-\begin{figure}[H]
+\begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth]{writeup/figures/baseline_verification_visualization.png}
   \caption{Visualization of functional verification for the 4$\times$4 multiplier. For each input pair $(X,Y)$, the upper-left number is the simulated product and the lower-right number is the ideal product $X \cdot Y$. Matching cells are shaded green; any mismatch would appear as a red cell.}
@@ -500,8 +501,76 @@ The optimizer increases $k_{\text{nand}}$ substantially (NANDs appear early and 
 
 % ----------------------------------------------------
 \section{Optimized Functional Verification}
+\label{sec:opt_functional_verification}
 
+The optimized 4$\times$4 multiplier was verified using the same
+exhaustive, self-checking infrastructure described for the baseline
+design in Section~\ref{sec:functional_verification}. The only change in
+the testbench is that the device under test (DUT) is now the optimized
+schematic; all stimulus generation, sampling times, and post-processing
+scripts are reused without modification. This ensures that any
+difference in behavior would be attributable to the circuit changes
+rather than to the verification environment.
 
+\subsection{Transient Stimulus and Waveforms}
+
+The eight primary inputs $X_0$--$X_3$ and $Y_0$--$Y_3$ are again driven
+by a \texttt{vpulse}-based binary counter with periods
+$T,2T,4T,8T$ and $16T,32T,64T,128T$, respectively. The transient
+simulation runs for $1.28\,\mu\mathrm{s} = 128T$, so that all
+$2^8 = 256$ input combinations $(X,Y)$ with $X,Y \in [0,15]$ are
+applied once.
+
+The resulting waveforms for the optimized DUT are shown in
+Fig.~\ref{fig:opt_signals}. As in the baseline case, the lower traces
+are the input bits and the upper traces are the multiplier outputs
+$Z_0$--$Z_7$, which respond deterministically to each new input vector.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{writeup/figures/optimized_verification_signals.png}
+  \caption{Transient response of the optimized 4$\times$4 multiplier under the same exhaustive binary-count stimulus used for the baseline design.}
+  \label{fig:opt_signals}
+\end{figure}
+
+\subsection{Digital Reconstruction and Result Table}
+
+The simulator output is exported to CSV and processed by the same pair
+of Python scripts used for the baseline:
+
+\begin{itemize}
+  \item The first script samples each signal at times
+        $t_k = kT/2 + T/4$ (midpoint of every stable interval), converts
+        voltages above $1.0\,\mathrm{V}$ to logic ``1'', voltages below
+        $0.2\,\mathrm{V}$ to logic ``0'', and flags any intermediate
+        values as unsettled.
+  \item The second script automatically detects bit ordering from the
+        toggle rates, reconstructs the integer operands
+        $A$ and $B$, forms the simulated product $Z$, and compares it to
+        the ideal product $A \cdot B$ for all $256$ input vectors.
+\end{itemize}
+
+For the optimized multiplier the script again reports 256/256 passing
+cases; no unsettled outputs are observed at the sampling instants. The
+results are visualized in the 16$\times$16 table of
+Fig.~\ref{fig:opt_verification_table}, constructed in the same style as
+Fig.~\ref{fig:baseline_verification_table}. Each cell corresponds to one
+input pair $(X,Y)$, with the simulated product shown in the upper-left
+of the cell and the ideal product $X \cdot Y$ in the lower-right; cells
+are shaded green when the two numbers agree.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{writeup/figures/optimized_verification_visualization.png}
+  \caption{Verification table for the optimized 4$\times$4 multiplier. For each input pair $(X,Y)$, the upper-left number is the simulated product and the lower-right number is the ideal product $X \cdot Y$. All 256 cases match, so every cell is green.}
+  \label{fig:opt_verification_table}
+\end{figure}
+
+Because the optimized implementation passes exactly the same exhaustive
+test as the baseline, with identical stimulus and checking criteria, we
+can conclude that the optimization preserves the functional behavior of
+the multiplier while enabling the delay and energy improvements
+discussed in later sections.
 
 \newpage
 
@@ -534,7 +603,150 @@ The optimizer increases $k_{\text{nand}}$ substantially (NANDs appear early and 
 \newpage
 
 % ----------------------------------------------------
-\section{Summary Comparison of Baseline and Optimized Designs}
+% ----------------------------------------------------
+\section{Design Exploration}
+\label{sec:design_exploration}
+
+Although the final implementation uses only complementary static-CMOS gates, we
+did explore a range of alternative logic styles and adder structures before
+settling on the architecture presented in this report. Our goal was to
+demonstrate meaningful design choices \emph{inside} the 4$\times$4 multiplier
+project (already more advanced than the alternative 8-bit adder option), without
+sacrificing robustness in a tiled, transistor-level implementation.
+
+\subsection{Multiplier Architectures Considered}
+
+At the architectural level we considered three broad multiplier families:
+
+\begin{itemize}
+  \item \textbf{Serial (shift-and-add) multipliers}, which reuse a single adder
+        across multiple cycles. These are attractive for low-area, low-power
+        designs but introduce a multi-cycle control path and are less aligned
+        with the ``bit-sliced datapath'' emphasis of the project.
+  \item \textbf{Tree-based multipliers} (e.g., Wallace or Dadda trees), which
+        use carry-save reduction to shorten the critical path. For 4-bit
+        operands, however, the overhead of extra compressor cells and routing is
+        comparable to the nominal gain, and the resulting layout is less
+        regular.
+  \item \textbf{Braun (array) multipliers}, which generate all partial products
+        with AND gates and reduce them with a regular grid of HAs and FAs.
+        This style has a very regular floorplan and exposes clear critical paths
+        (CP$_1$, CP$_2$) that are easy to analyze and optimize.
+\end{itemize}
+
+Given the small operand size and the project’s focus on schematic-level cell
+design and sizing, we chose the Braun array. It provides enough structure to
+make ``critical-path aware'' optimization meaningful, while remaining simple
+enough to verify exhaustively at the transistor level.
+
+\subsection{Adder Cell Topologies}
+
+Within the chosen array structure we then considered several full-adder and
+half-adder realizations:
+
+\begin{itemize}
+  \item A \textbf{pure gate-assembled FA/HA}, built from library-style XOR,
+        NAND, NOR, and inverter cells (our baseline). This option is conceptually
+        straightforward but produces relatively deep logic chains on the
+        critical staircases.
+  \item A \textbf{mirror-style static-CMOS FA} (Rabaey-style), in which the
+        pull-up and pull-down networks implement the carry logic directly and
+        share internal nodes between Sum and Carry. This reduces the number of
+        distinct logic stages and internal fanouts.
+  \item \textbf{Pass-transistor and transmission-gate adders}, which can reduce
+        transistor count and input capacitance at the cost of more complex
+        signal-level behavior (level degradation, charge sharing, etc.).
+\end{itemize}
+
+We briefly prototyped pass-transistor based XOR and FA variants at the schematic
+level, but ultimately focused our optimization effort on the complementary
+static-CMOS FA and HA. This choice aligned better with the goal of a robust
+tiled array: the static-CMOS cells provide full-swing, monotonic outputs and
+simple noise-margin reasoning when cascaded many times.
+
+\subsection{Logic Styles: Static CMOS vs. Ratioed / Pass-Transistor Logic}
+
+During the exploration phase we also considered more aggressive logic styles,
+specifically ratioed logic (e.g., pseudo-NMOS) and pass-transistor/transmission
+gate networks, as potential ways to speed up the critical path or reduce area.
+
+\paragraph{Ratioed logic.}
+
+Ratioed logic can implement certain functions with fewer transistors than
+complementary static CMOS, potentially reducing load capacitance. However, it
+comes with several drawbacks that are particularly problematic in this project:
+
+\begin{itemize}
+  \item \textbf{Static power consumption}: a permanently on pull-up device
+        leads to DC current whenever the pull-down network conducts, which is
+        undesirable in a deeply cascaded structure.
+  \item \textbf{Reduced noise margins and level restoration requirements}:
+        the logic levels depend on device strength ratios; variations in process,
+        voltage, or temperature can move outputs away from solid rail-to-rail
+        values. Over multiple stages this can accumulate into functional
+        uncertainty.
+  \item \textbf{Cascading into static-CMOS array cells}: mixing ratioed stages
+        with static-CMOS adders along long paths (e.g., CP$_1$ and CP$_2$) makes
+        it harder to guarantee that all internal nodes stay in safe regions
+        under worst-case switching.
+\end{itemize}
+
+Given that our multiplier already tiles many bit-slices and that we verify at
+the transistor level rather than with idealized models, we decided not to push
+the design further into ratioed logic. The potential delay savings did not
+justify the added verification burden and reliability risk in this use case.
+
+\paragraph{Pass-transistor and transmission-gate logic.}
+
+Pass-transistor and transmission-gate structures can be highly efficient for
+XOR/XNOR and multiplexing, and many published ``fast adders'' use them. We did
+look at such adders, but several issues emerged when mapping them into our
+array:
+
+\begin{itemize}
+  \item \textbf{Level degradation in NMOS-only passes}: unless explicitly
+        followed by restoration inverters, high levels passed through NMOS-only
+        networks can degrade by a threshold voltage. This complicates noise
+        margin analysis when these nodes drive further CMOS stages.
+  \item \textbf{Charge sharing and dynamic behavior}: internal nodes in
+        pass-transistor networks can float or experience charge sharing between
+        configurations, which is harder to reason about across many cascaded
+        cells and worst-case input patterns.
+  \item \textbf{Control signal routing and layout complexity}: in a small,
+        regular 4$\times$4 array, the control routing overhead for
+        transmission-gate structures can offset their transistor-count
+        advantage.
+\end{itemize}
+
+We concluded that, for this particular project, the verification and robustness
+costs of a heavily pass-transistor-based array outweighed the benefits. Since
+we were already taking on the more advanced ``4$\times$4 transistor-level
+multiplier'' project (rather than the simpler 8-bit adder option), we chose to
+focus our design effort on a well-understood, fully static-CMOS style and to
+explore optimization via \emph{cell topology} and \emph{transistor sizing}
+instead.
+
+\subsection{Final Design Focus}
+
+After this exploration, our final design strategy was:
+
+\begin{itemize}
+  \item Keep the \textbf{architecture} simple and regular: a 4$\times$4 Braun
+        array with static-CMOS partial-product ANDs, HAs, and FAs.
+  \item Use the \textbf{baseline gate-assembled FA/HA} as a functional
+        reference, then adopt a \textbf{complementary static-CMOS FA} with
+        shared internal nodes as the optimized cell.
+  \item Perform \textbf{systematic sizing optimization} along the identified
+        critical path (CP$_1$), using an Elmore-delay model and continuous size
+        variables to reduce the worst-case delay while keeping the logic style
+        robust and fully static.
+\end{itemize}
+
+In other words, we did explore more exotic logic families and alternative
+architectures but ultimately chose to keep the logic style conservative and
+focus our ``advanced'' work on transistor-level optimization and timing
+analysis within the static-CMOS 4$\times$4 array framework.
+
 
 
 
