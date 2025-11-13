@@ -43,7 +43,83 @@
 % ----------------------------------------------------
 \section{Baseline Functional Verification}
 
+To verify the correctness of both the baseline and optimized 4$\times$4 multiplier implementations, we built a fully exhaustive, self-checking testbench around the transistor-level schematic. The testbench (1) applies all $2^8 = 256$ possible input combinations to the multiplier, (2) samples the eight output bits only after they have settled, and (3) automatically checks that every sampled output word matches the ideal product $Z = X \cdot Y$.
 
+\subsection{Exhaustive Transient Stimulus}
+
+The testbench consists of the multiplier under test driven by eight independent \texttt{vpulse} sources, one per primary input bit ($X_0$–$X_3$ and $Y_0$–$Y_3$). Each source is configured with a different period so that, taken together, the inputs realize a hardware binary counter:
+
+\begin{center}
+\begin{tabular}{c c}
+$X_0$: period $T = 10\,\mathrm{ns}$, & $Y_0$: period $16T$ \\
+$X_1$: period $2T$,                  & $Y_1$: period $32T$ \\
+$X_2$: period $4T$,                  & $Y_2$: period $64T$ \\
+$X_3$: period $8T$,                  & $Y_3$: period $128T$
+\end{tabular}
+\end{center}
+
+With a 50\% duty cycle on each bit, this configuration causes the eight inputs to count through all binary patterns from 0 to 255. Over a total simulation time of $1.28\,\mu\mathrm{s} = 128T$, the testbench therefore applies every possible unsigned input pair $(X,Y)$ with $X,Y \in [0,15]$. The corresponding Cadence waveform capture is shown in Fig.~\ref{fig:baseline_signals}, where the lower traces are the input bits and the upper traces are the multiplier outputs $Z_0$–$Z_7$.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{writeup/figures/baseline_verification_signals.png}
+  \caption{Transient response of the 4$\times$4 multiplier under exhaustive binary-count stimulus. The eight input bits form a hardware counter, and the eight output bits respond to each new input vector.}
+  \label{fig:baseline_signals}
+\end{figure}
+
+Because this verification runs on the full transistor-level schematic, it naturally captures the effects of propagation delay, glitching, and finite output slew; no behavioral or idealized models are used.
+
+\subsection{Sampling and Logic-Level Conversion}
+
+The simulator output is exported to CSV and processed in Python. Rather than sampling at arbitrary times, we choose one time point in the middle of each interval where the inputs are guaranteed to be static. The shortest time between two transitions on any input is $T/2$ (the high or low half of $X_0$'s period), so we define the $k$th sampling instant as
+\[
+t_k = \frac{kT}{2} + \frac{T}{4}, \qquad k = 0,1,\dots,255.
+\]
+At $t_k$ the counter has been stable for at least $T/4$ and the multiplier output has had time to settle to its final value.
+
+For each $t_k$, the script locates the nearest time point in the exported CSV and extracts the voltages for all input and output nodes. These analog voltages are then converted to logic levels using conservative thresholds:
+\[
+V > 1.0\,\mathrm{V} \Rightarrow \text{logic 1}, \qquad
+V < 0.2\,\mathrm{V} \Rightarrow \text{logic 0}.
+\]
+Values that fall between 0.2\,V and 1.0\,V are marked as ``unsettled'' (stored as NaN) instead of being forced to a digital 0 or 1. This makes the check robust to slow transitions or ringing: if any output bit has not reached a valid logic level by the sampling time, the issue is surfaced immediately in the processed data rather than silently misclassified.
+
+The result of this first Python stage is a new CSV file with exactly 256 rows (one per input vector) and clean digital values for all bits $X_3$–$X_0$, $Y_3$–$Y_0$, and $Z_7$–$Z_0$.
+
+\subsection{Reconstruction of Integer Operands and Products}
+
+A second Python script interprets the bit fields as integers and checks the arithmetic. A practical concern when exporting from Cadence is that the bit order in the CSV may not match the expected LSB-to-MSB ordering. To guard against this, the script first analyzes the number of transitions on each bit; the bit with the highest toggle count must be the LSB (it has the shortest period). If the fastest-toggling column is labeled $X_3$ instead of $X_0$, for example, the script concludes that the bits are reversed and flips the order in software before proceeding. The same logic is applied to the $Y$ inputs. This automatic detection makes the verification insensitive to column-ordering mistakes in the export step.
+
+With the bit ordering corrected, the integer values are reconstructed as
+\begin{align*}
+A &= X_0 + 2X_1 + 4X_2 + 8X_3, \\
+B &= Y_0 + 2Y_1 + 4Y_2 + 8Y_3, \\
+Z &= Z_0 + 2Z_1 + 4Z_2 + 8Z_3 + 16Z_4 + 32Z_5 + 64Z_6 + 128Z_7.
+\end{align*}
+These become the columns \texttt{A\_val}, \texttt{B\_val}, and \texttt{Z\_val}. The correct reference result is simply
+\[
+\texttt{Expected} = \texttt{A\_val} \times \texttt{B\_val}.
+\]
+For each of the 256 vectors the script sets a Boolean flag \texttt{Pass} if \texttt{Z\_val == Expected}. A short summary printed at the end of the run reports how many of the 256 cases passed and, if any failed, lists the mismatched vectors with their input pair, measured product, and expected product. For both the baseline and optimized multipliers, the script reports 256/256 passing cases.
+
+\subsection{Verification Table Visualization}
+
+To make the results easy to interpret at a glance, a final Python script converts the verified dataset into the 16$\times$16 table shown in Fig.~\ref{fig:baseline_verification_table}. The horizontal axis corresponds to the integer value of $X$, the vertical axis corresponds to $Y$, and each cell encodes the product for one $(X,Y)$ pair:
+
+\begin{itemize}
+  \item The upper-left number in each cell is the measured product $Z$ from the simulation.
+  \item The lower-right number is the ideal product $X \cdot Y$.
+  \item The cell background is colored green if these two numbers agree and red otherwise.
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\linewidth]{writeup/figures/baseline_verification_visualization.png}
+  \caption{Visualization of functional verification for the 4$\times$4 multiplier. For each input pair $(X,Y)$, the upper-left number is the simulated product and the lower-right number is the ideal product $X \cdot Y$. Matching cells are shaded green; any mismatch would appear as a red cell.}
+  \label{fig:baseline_verification_table}
+\end{figure}
+
+Because the multiplier is correct, every cell in Fig.~\ref{fig:baseline_verification_table} is green and the two numbers in each cell are identical. Any systematic wiring error (for example, swapping two output bits or mis-interpreting signedness) would create a visible pattern of red cells, making this visualization a powerful sanity check in addition to the numerical pass/fail summary. The same scripts are reused for both the baseline and optimized designs, so any changes to the circuit can be re-verified quickly and objectively using identical criteria.
 
 \newpage
 
@@ -73,7 +149,7 @@
 
 \subsection{Worst Case Delay}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.92\linewidth]{writeup/figures/arraymult_criticalpath.png}
   \caption{Critical-path staircases in a 4×4 Braun array multiplier. X$_0$–X$_3$ are the N bits (multiplicand) and Y$_0$–Y$_3$ are the M bits (multiplier). Figure adapted from materials by Prof. Janakiraman Viraraghavan, IIT Madras.}
@@ -129,7 +205,7 @@ Multiple staircases (such as CP$_1$ and CP$_2$ in the figure) have the same hop 
 \subsection{Schematics in Static CMOS}
 \subsubsection{Full Adder (FA)}
 
-\begin{figure}[h]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.95\linewidth]{writeup/figures/staticcmos_fa_rabaey_annotated.png}
   \caption{Complementary static-CMOS full adder. Figure adapted from Rabaey.}
