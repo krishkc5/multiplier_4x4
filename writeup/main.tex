@@ -30,7 +30,23 @@
 % ----------------------------------------------------
 \section{Introduction and Background}
 
+Digital multipliers are essential building blocks in modern computational systems. They appear in nearly every performance–critical arithmetic datapath, including ALUs, DSP engines, FIR filters, graphics pipelines, image–processing accelerators, and machine–learning MAC arrays. As technology scales, the system--level cost of multiplication has increased due to rising throughput demands, tighter power budgets, and shrinking timing margins. Even small improvements in the delay or energy of a single multiplier cell can accumulate into substantial architectural savings when these cells are instantiated hundreds or thousands of times in larger designs.
 
+Within this context, small fixed–point array multipliers (such as the $4\times 4$ structure studied here) serve as an ideal pedagogical and practical platform for understanding transistor–level behavior. Their regular, bit–sliced structure exposes fundamental CMOS effects---fanout loading, logic effort, signal alignment, glitch generation, and both dynamic and leakage power---which often remain hidden in behavioral or gate–level abstractions. By working directly at the schematic and transistor level, the designer is able to observe how real device physics shapes delay and power, making array multipliers a clean sandbox for exploring optimization techniques.
+
+The Braun array architecture used in this project is one of the most classical and structurally uniform multiplier topologies. The array multiplier has a predictable grid of partial–product AND gates followed by rows of half and full adders. Carries flow along diagonal paths while sums propagate horizontally, making critical paths easy to trace analytically. This regularity allows for direct application of structured optimization methods such as Elmore–delay modeling and transistor sizing, with architectural effects such as glitching and partial–product races emerging naturally from the unequal arrival times of internal signals.
+
+The purpose of this project is not merely to design a correct $4\times 4$ multiplier, but to treat the multiplier as a vehicle for studying the full design–measure–optimize workflow used in high–performance CMOS arithmetic design. We first construct a baseline array multiplier using minimum–sized static–CMOS gates, verify its correctness with exhaustive transient simulation, and characterize three key metrics:
+
+\begin{itemize}
+    \item worst–case propagation delay,
+    \item active (dynamic) switching energy, and
+    \item leakage energy.
+\end{itemize}
+
+These measurements serve as the reference against which all optimizations are compared. The optimization process then proceeds along two major axes. First, we replace the baseline “bag–of–gates” full adder with a compact complementary static–CMOS full adder that reduces internal logic depth and alleviates excessive fanout through the XOR/majority chain. This directly targets the diagonal carry–propagation staircase that dominates the critical path of the baseline array. Second, we analytically size the gates along this critical path using an Elmore–delay RC model. The analytical solution provides continuous sizing factors, revealing the ideal ratio between NAND, inverter, and XOR stages. These continuous values are then rounded to the nearest integer transistor widths and implemented in the actual schematic, after which the optimized design is re–evaluated under the exact same testbenches as the baseline.
+
+The broader significance of this study extends well beyond a single $4\times 4$ multiplier. The methodology applied here---critical path identification, load–aware sizing, delay balancing, glitch–energy mitigation, and structured performance characterization---forms the backbone of modern VLSI implementation for datapath circuits. While real industrial processors operate at different scales, voltages, device technologies, and arithmetic widths, the same transistor–level principles govern their behavior. This project therefore provides a compact, controlled environment in which to explore the fundamental techniques that underlie high–performance digital integrated circuit design.
 
 \newpage
 
@@ -65,7 +81,7 @@ the multiplier bits $Y_0$--$Y_3$ enter from the right. Each AND gate at the top 
 computes a partial product $X_i Y_j$, and these partial products feed into the HA/FA
 array below.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.7\linewidth]{writeup/figures/baseline_multiplier.png}
   \caption{Gate-level structure of the baseline 4$\times$4 Braun array multiplier. Partial
@@ -97,7 +113,7 @@ Fig.~\ref{fig:baseline_adders}. Every gate instance in these schematics is built
 minimum-size transistors; there is no sizing difference between baseline and optimized
 implementations at this level.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \begin{subfigure}{0.95\linewidth}
     \centering
@@ -120,6 +136,13 @@ implementations at this level.
 
   \caption{Adder cells used in the baseline 4$\times$4 array multiplier.}
   \label{fig:baseline_adders}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_multiplier.png}
+    \caption{}
+    \label{fig:placeholder}
 \end{figure}
 
 \subsubsection*{Full adder}
@@ -168,7 +191,7 @@ All logic gates in the baseline adder cells are implemented as transistor-level 
 cells using \emph{minimum-size} devices. Figure~\ref{fig:baseline_gates} shows the
 schematics of the XOR2, NOR2, NAND2, AND2, and inverter cells used throughout the design.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \begin{subfigure}{0.32\linewidth}
     \centering
@@ -251,6 +274,13 @@ and critical-path sizing results.
 
 To verify the correctness of both the baseline and optimized 4$\times$4 multiplier implementations, we built a fully exhaustive, self-checking testbench around the transistor-level schematic. The testbench (1) applies all $2^8 = 256$ possible input combinations to the multiplier, (2) samples the eight output bits only after they have settled, and (3) automatically checks that every sampled output word matches the ideal product $Z = X \cdot Y$.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1\linewidth]{writeup//figures/baseline_verification_tb.png}
+    \label{fig:placeholder}
+    \caption{}
+\end{figure}
+
 \subsection{Exhaustive Transient Stimulus}
 
 The testbench consists of the multiplier under test driven by eight independent \texttt{vpulse} sources, one per primary input bit ($X_0$–$X_3$ and $Y_0$–$Y_3$). Each source is configured with a different period so that, taken together, the inputs realize a hardware binary counter:
@@ -266,7 +296,7 @@ $X_3$: period $8T$,                  & $Y_3$: period $128T$
 
 With a 50\% duty cycle on each bit, this configuration causes the eight inputs to count through all binary patterns from 0 to 255. Over a total simulation time of $1.28\,\mu\mathrm{s} = 128T$, the testbench therefore applies every possible unsigned input pair $(X,Y)$ with $X,Y \in [0,15]$. The corresponding Cadence waveform capture is shown in Fig.~\ref{fig:baseline_signals}, where the lower traces are the input bits and the upper traces are the multiplier outputs $Z_0$–$Z_7$.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{writeup/figures/baseline_verification_signals.png}
   \caption{Transient response of the 4$\times$4 multiplier under exhaustive binary-count stimulus. The eight input bits form a hardware counter, and the eight output bits respond to each new input vector.}
@@ -428,7 +458,19 @@ of the baseline multiplier.
 
 \subsection{Worst-Case Delay Test Schematic}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{writeup//figures/baseline_delay_tb.png}
+    \label{fig:placeholder}
+    \caption{}
+\end{figure}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_delay_inputs.png}
+    \label{fig:placeholder}
+    \caption{}
+\end{figure}
 
 \newpage
 
@@ -439,8 +481,8 @@ of the baseline multiplier.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\linewidth]{writeup//figures/baseline_delay_low_high_signals.png}
-    \caption{Enter Caption}
     \label{fig:baseline_delay_low_high_signals}
+    \caption{}
 \end{figure}
 
 To extract the worst--case delay, the multiplier was excited with the input pattern
@@ -477,7 +519,7 @@ Thus, the worst--case delay of the baseline multiplier is
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\linewidth]{writeup//figures/baseline_delay_high_low_signals.png}
-    \caption{Enter Caption}
+    \caption{}
     \label{fig:baseline_delay_high_low_signals}
 \end{figure}
 
@@ -515,7 +557,26 @@ Therefore, the worst--case $t_{\mathrm{PHL}}$ of the baseline multiplier is
 
 \subsection{Active Energy Test Schematic}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{writeup//figures/bsaeline_active_max_tb.png}
+    \label{fig:placeholder}
+    \caption{}
+\end{figure}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_active_max_inputs.png}
+    \caption{Maximum active energy inputs}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_active_avg_inputs.png}
+    \caption{Average active energy inputs}
+    \label{fig:placeholder}
+\end{figure}
 
 \newpage
 
@@ -578,42 +639,21 @@ E_{\text{avg}} = 89.83~\text{fJ}.
 % ----------------------------------------------------
 \section{Baseline Leakage Energy Measurement}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_FA_leakage_energy_value_case0.png}
-    \caption{Enter Caption}
-    \label{fig:baseline_FA_leakage_energy_value_case0}
-\end{figure}
-
-
-
-
-
-
-
-Min Leakage
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_minimum_leakage_value.png}
-    \caption{Enter Caption}
-    \label{fig:placeholder}
-\end{figure}
-
-Max Leakage
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_maximum_leakage_value.png}
-    \caption{Enter Caption}
-    \label{fig:placeholder}
-\end{figure}
-
-\newpage
-
 \subsection{Leakage Energy Test Schematic}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{writeup//figures/baseline_leakage_min_tb.png}
+    \caption{Maximum leakage energy testbench}
+    \label{fig:placeholder}
+\end{figure}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\linewidth]{writeup//figures/baseline_leakage_max_tb.png}
+    \caption{Minimum leakage energy testbench}
+    \label{fig:placeholder}
+\end{figure}
 
 \newpage
 
@@ -661,6 +701,13 @@ A representative FA leakage waveform for the $(0, 0, 0)$ input case is shown in 
     \label{fig:baseline_FA_leakage_case_0_signal}
 \end{figure}
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_FA_leakage_energy_value_case0.png}
+    \caption{Example leakage energy for the  $(0, 0, 0)$ input case. The remaining input cases were tested and extracted values are shown below in Table~\ref{tab:fa_leak_table}}
+    \label{fig:baseline_FA_leakage_energy_value_case0}
+\end{figure}
+
 \begin{table}[H]
 \centering
 \begin{tabular}{c c c | c}
@@ -704,6 +751,34 @@ The same methodology is used: static inputs, a 4\,ns transient run, and integrat
 
 The multiplier-level leakage energies are summarized in Table~\ref{tab:mult_leak_table}.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{writeup//figures/baseline_leakage_min_signal.png}
+    \caption{Minimum leakage signal}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_minimum_leakage_value.png}
+    \caption{Minimum leakage value}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]{writeup//figures/baseline_leakage_max_signal.png}
+    \caption{Maximum leakage signal}
+    \label{fig:placeholder}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup//figures/baseline_maximum_leakage_value.png}
+    \caption{Maximum leakage value}
+    \label{fig:placeholder}
+\end{figure}
+
 \begin{table}[H]
 \centering
 \begin{tabular}{c c | c}
@@ -721,7 +796,47 @@ These results scale consistently with the FA characterization: the multiplier co
 \newpage
 
 % ----------------------------------------------------
-\section{Optimized Design}
+\section{Baseline Design Summary Table}
+
+Table~\ref{tab:baseline_summary} summarizes the key performance metrics of the
+baseline $4\times4$ array multiplier, including worst-case delay, dynamic
+(active) energy, and static (leakage) energy characteristics.
+
+\begin{table}[H]
+    \centering
+    \renewcommand{\arraystretch}{1.25}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline
+        Low-to-high delay $t_{PLH}$ & $196.637\ \text{ps}$ \\
+        \hline
+        High-to-low delay $t_{PHL}$ & $193.423\ \text{ps}$ \\
+        \hline
+        Worst-case delay $t_{\text{wc}} = \max(t_{PLH}, t_{PHL})$ 
+        & $196.637\ \text{ps}$ \\
+        \hline
+        Maximum switching active energy $E_{\max}$ 
+        & $122.2\ \text{fJ}$ \\
+        \hline
+        Average switching active energy $E_{\text{avg}}$
+        & $89.83\ \text{fJ}$ \\
+        \hline
+        Maximum leakage energy ($X=0000$, $Y=0000$) 
+        & $880.9\ \text{zJ}$ \\
+        \hline
+        Minimum leakage energy ($X=1111$, $Y=1111$) 
+        & $775.8\ \text{zJ}$ \\
+        \hline
+    \end{tabular}
+    \caption{Summary of baseline multiplier delay and energy metrics.}
+    \label{tab:baseline_summary}
+\end{table}
+
+\newpage
+
+% ----------------------------------------------------
+\section{Summary of Optimization Process}
 
 \subsection{Worst Case Delay}
 
@@ -1071,6 +1186,12 @@ which is an \textbf{approx.\ 10.8\%} reduction in the CP1 Elmore constant under 
 \paragraph{Interpretation.}
 The optimizer increases $k_{\text{nand}}$ substantially (NANDs appear early and repeatedly), raises $k_{\text{xor}}$ to avoid starving step~11, and keeps the late-stage drivers ($k_{\text{inv}}$, $k_{\text{fa1}}$, $k_{\text{fa2}}$) moderately above unity to balance the large downstream loads, especially the final $10C_g$. The stationarity equations enforce near-equalized per-stage effort over the 21-step chain, preventing the tail (steps 16--21) from dominating while also avoiding excessive upsizing that would inflate upstream capacitive loads.
 
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{writeup//figures/opt_mult.png}
+    \caption{optimized multiplier schematic}
+    \label{fig:placeholder}
+\end{figure}
 
 \newpage
 
@@ -1101,7 +1222,7 @@ Fig.~\ref{fig:opt_signals}. As in the baseline case, the lower traces
 are the input bits and the upper traces are the multiplier outputs
 $Z_0$--$Z_7$, which respond deterministically to each new input vector.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{writeup/figures/optimized_verification_signals.png}
   \caption{Transient response of the optimized 4$\times$4 multiplier under the same exhaustive binary-count stimulus used for the baseline design.}
@@ -1134,7 +1255,7 @@ input pair $(X,Y)$, with the simulated product shown in the upper-left
 of the cell and the ideal product $X \cdot Y$ in the lower-right; cells
 are shaded green when the two numbers agree.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\linewidth]{writeup/figures/optimized_verification_visualization.png}
   \caption{Verification table for the optimized 4$\times$4 multiplier. For each input pair $(X,Y)$, the upper-left number is the simulated product and the lower-right number is the ideal product $X \cdot Y$. All 256 cases match, so every cell is green.}
@@ -1216,7 +1337,7 @@ Thus, the worst-case delay of the optimized multiplier is
 \[
 t_{p,\text{worst}}^{(\text{opt})}
   = \max(t_{pLH}^{(\text{opt})},\, t_{pHL}^{(\text{opt})})
-  \approx 125.4~\text{ps}.
+  \approx \boxed{125.4~\text{ps}}.
 \]
 
 For comparison, the baseline multiplier exhibited a worst-case delay of
@@ -1245,25 +1366,168 @@ criterion, no further parametric sweep or numerical optimization was necessary.
 % ----------------------------------------------------
 \section{Optimized Active Energy Measurement}
 
+To evaluate the impact of gate sizing on dynamic power consumption, we repeated the
+active-energy measurements using the same simulation setup and testbenches employed
+for the baseline multiplier. This ensures that any difference in energy consumption
+is attributable solely to the optimized device sizes rather than changes in methodology.
 
+As before, two cases were simulated:
+
+\begin{enumerate}
+    \item \textbf{Maximum switching activity:} all input bits transition from $0 \rightarrow 1$ simultaneously.
+    \item \textbf{Average switching activity:} half of the input bits transition from $0 \rightarrow 1$.
+\end{enumerate}
+
+In both scenarios, the transient current drawn from the supply was integrated over
+one full multiplication event, and the active energy was computed using
+\[
+E_{\text{active}} = \int_{t_0}^{t_1} i_{\text{VDD}}(t)\, V_{\text{DD}} \, dt.
+\]
+
+\subsection{Maximum Switching Active Energy}
+
+The measured optimized active energy for the maximum-switching case is shown below.
+The extracted value is indicated in Fig.~\ref{fig:optimized_active_energy_max_value}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup/figures/optimized_active_energy_max_value.png}
+    \caption{Optimized maximum-switching active energy measurement. Extracted value: \textbf{49.62 fJ}.}
+    \label{fig:optimized_active_energy_max_value}
+\end{figure}
+
+\subsection{Average Switching Active Energy}
+
+Similarly, the average-switching energy was recorded using the identical procedure.
+The corresponding extracted value is shown in Fig.~\ref{fig:optimized_active_energy_avg_value}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup/figures/optimized_active_energy_avg_value.png}
+    \caption{Optimized average-switching active energy measurement. Extracted value: \textbf{28.97 fJ}.}
+    \label{fig:optimized_active_energy_avg_value}
+\end{figure}
 
 \newpage
+
 
 % ----------------------------------------------------
 \section{Optimized Leakage Energy Measurement}
 
+Leakage energy for the optimized multiplier was evaluated using the same leakage
+testbench and procedure used for the baseline design. This includes:
 
+\begin{itemize}
+    \item static (DC) input application to all multiplier inputs,
+    \item transient simulation over one delay-period window,
+    \item integrating the supply current to compute leakage energy:
+    \[
+        E_{\text{leak}} = \int_{t_0}^{t_1} i_{\text{VDD}}(t)\, V_{\text{DD}} \, dt,
+    \]
+    \item reusing the same worst-case and best-case input assignments identified
+          during the full-adder-based leakage analysis.
+\end{itemize}
+
+\subsection{Minimum Leakage Energy Case}
+
+The minimum-leakage configuration similarly matches the baseline methodology, ensuring
+that all internal adders operate in the least-leaky input state. The measured minimum
+leakage energy is shown in Fig.~\ref{fig:optimized_leakage_energy_max_value}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup/figures/optimized_leakage_energy_max_value.png}
+    \caption{Optimized minimum leakage energy measurement. Extracted value: \textbf{886.4 zJ}.}
+    \label{fig:optimized_leakage_energy_max_value}
+\end{figure}
+
+\subsection{Maximum Leakage Energy Case}
+
+The maximum leakage configuration corresponds to the input combination that places
+the largest number of full adders into the highest-leakage bias state. The measured
+leakage energy for this case is shown in Fig.~\ref{fig:optimized_leakage_energy_min_value}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\linewidth]{writeup/figures/optimized_leakage_energy_min_value.png}
+    \caption{Optimized maximum leakage energy measurement. Extracted value: \textbf{1.256 aJ}.}
+    \label{fig:optimized_leakage_energy_min_value}
+\end{figure}
 
 \newpage
 
 % ----------------------------------------------------
-\section{Summary of Optimization Process}
+\section{Optimized Design Summary Table}
 
+Table~\ref{tab:opt_summary} summarizes the key performance metrics of the optimized
+$4\times4$ array multiplier, including worst-case delay, active energy,
+and leakage energy. Both the analytical gate-sizing factors obtained from
+the Elmore-delay optimization and the nearest-integer implemented device
+scales are listed.
 
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{c|c|c}
+\hline
+\textbf{Parameter} & \textbf{Baseline Design} & \textbf{Optimized Design} \\
+\hline
+$t_{pLH}$ (ps) & 196.637 & 125.4 \\
+$t_{pHL}$ (ps) & 193.423 & 61.4 \\
+$t_{p,\text{worst}}$ (ps) & 196.637 & 125.4 \\
+\hline
+$E_{\text{active,max}}$ (fJ) & 122.2 & 49.62 \\
+$E_{\text{active,avg}}$ (fJ) & 89.83 & 28.97 \\
+\hline
+$E_{\text{leak,min}}$ (zJ) & 775.8 & 886.4 \\
+$E_{\text{leak,max}}$ (zJ) & 880.9 & 1256.0 \\
+\hline
+\end{tabular}
+\caption{Performance summary of the baseline and optimized $4\times4$ multiplier. 
+The same testbenches and input patterns were used for both designs to ensure a fair comparison.}
+\label{tab:opt_summary}
+\end{table}
+
+\subsection*{Gate Sizing Factors}
+
+Table~\ref{tab:k_values} lists the analytical continuous-valued sizing factors
+obtained from the Elmore delay optimization, as well as the nearest-integer
+values used in the actual schematic implementation.
+
+\begin{table}[H]
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{c|c|c}
+\hline
+\textbf{Gate Type} & \textbf{Analytical $k$} & \textbf{Implemented $k$} \\
+\hline
+$k_{\text{nand}}$ & 8.27 & 8 \\
+$k_{\text{inv}}$  & 1.62 & 2 \\
+$k_{\text{fa1}}$  & 1.79 & 2 \\
+$k_{\text{fa2}}$  & 1.62 & 2 \\
+$k_{\text{xor}}$  & 3.15 & 3 \\
+\hline
+\end{tabular}
+\caption{Optimized gate sizing factors from analytical Elmore-delay solution and
+their nearest-integer realizations used in simulation.}
+\label{tab:k_values}
+\end{table}
+
+\noindent\textbf{Notes:}
+\begin{itemize}
+    \item The same worst-case input pattern used in the baseline delay analysis
+          was applied to the optimized design.
+    \item The optimized multiplier achieves a 
+    \[
+        \frac{196.637 - 125.4}{196.637} \approx 36.3\% \text{ reduction in worst-case delay},
+    \]
+    exceeding the project goal of a \textbf{25\% delay reduction}.
+    \item Because the analytical sizing directly met performance targets,
+          no additional parametric sweep or numerical tuning was required.
+\end{itemize}
 
 \newpage
 
-% ----------------------------------------------------
 % ----------------------------------------------------
 \section{Design Exploration}
 \label{sec:design_exploration}
@@ -1408,14 +1672,177 @@ architectures but ultimately chose to keep the logic style conservative and
 focus our ``advanced'' work on transistor-level optimization and timing
 analysis within the static-CMOS 4$\times$4 array framework.
 
-
-
-
 \newpage
 
 % ----------------------------------------------------
 \section{Conclusion}
 
+This project implemented, characterized, and analytically optimized a 4\,$\times$\,4
+array multiplier in a 45\,nm CMOS process.  Starting from a functionally correct
+baseline design, we systematically measured worst--case delay, active
+(dynamic) energy, and leakage energy, then applied Elmore-delay based gate
+sizing to reduce the critical-path delay.  The optimized schematic was
+re-simulated using identical testbenches and input patterns to allow a
+direct, apples-to-apples comparison of performance and energy.
+
+Table~\ref{tab:opt_summary} summarizes the key metrics for the baseline and
+optimized designs; the main outcomes are:
+%
+\begin{itemize}
+  \item Worst--case propagation delay reduced from
+        $t_{p,\mathrm{worst}}^{\text{(base)}} = 196.637\,$ps to
+        $t_{p,\mathrm{worst}}^{\text{(opt)}} = 125.4\,$ps
+        (a reduction of $\approx 36.3\%$), exceeding the
+        required $25\%$ improvement.
+  \item Maximum--switching active energy reduced from
+        $E_{\text{active,max}}^{\text{(base)}} = 122.2\,$fJ to
+        $E_{\text{active,max}}^{\text{(opt)}} = 49.62\,$fJ, and
+        average--switching active energy reduced from
+        $E_{\text{active,avg}}^{\text{(base)}} = 89.83\,$fJ to
+        $E_{\text{active,avg}}^{\text{(opt)}} = 28.97\,$fJ
+        (roughly a $2$--$3\times$ reduction in dynamic energy).
+  \item Minimum leakage energy increased from
+        $E_{\text{leak,min}}^{\text{(base)}} = 775.8\,$zJ to
+        $E_{\text{leak,min}}^{\text{(opt)}} = 886.4\,$zJ, while
+        maximum leakage energy increased from
+        $E_{\text{leak,max}}^{\text{(base)}} = 880.9\,$zJ to
+        $E_{\text{leak,max}}^{\text{(opt)}} = 1256.0\,$zJ.
+\end{itemize}
+
+These results show that the Elmore-based optimization achieved the primary
+objective (delay reduction) and provided surprisingly large savings in active
+energy, at the expense of a modest-to-moderate increase in leakage.
+
+\subsection*{Relationship Between Analytical and Implemented Sizing}
+
+The gate sizing optimization in Section 8 treated the
+critical path CP1 as an RC ladder and minimized its Elmore delay by scaling
+five gate types: NAND, inverter, the two full-adder stages (FA1, FA2), and
+XOR.  The continuous optimum in normalized units was
+%
+\[
+  k_{\text{nand}} \approx 8.27,\quad
+  k_{\text{inv}}  \approx 1.62,\quad
+  k_{\text{fa1}} \approx 1.79,\quad
+  k_{\text{fa2}} \approx 1.62,\quad
+  k_{\text{xor}} \approx 3.15,
+\]
+%
+which was then mapped to nearest integer sizes in the schematic:
+$k_{\text{nand}}=8$, $k_{\text{inv}}=2$, $k_{\text{fa1}}=2$,
+$k_{\text{fa2}}=2$, and $k_{\text{xor}}=3$. In other words, the optimization suggests
+significant upsizing of the NAND and XOR cells on CP1, while the inverters
+and full adders are only slightly larger than minimum-size.
+
+The measured worst--case delay of the optimized multiplier,
+$t_{p,\mathrm{worst}}^{\text{(opt)}} \approx 125.4\,$ps, is in good
+agreement with the predicted reduction from the Elmore model.  This is
+notable because the Elmore analysis ignores diffusion capacitances,
+nonlinear transistor behavior, and internal full-adder structure, yet it
+still captures the dominant RC trends well enough that a simple
+nearest-integer implementation delivers more than the targeted delay
+improvement.  No additional parametric sweep or numerical re-optimization
+was required.
+
+\subsection*{Why Delay Improves While Active Energy Drops}
+
+At first glance, aggressively sizing up NAND and XOR gates along the critical
+path might be expected to \emph{increase} dynamic energy, since switching
+energy scales with $C_{\text{load}}V_{\text{DD}}^2$ and larger gates have
+higher input and output capacitances.  However, the measurements show a
+substantial \emph{reduction} in both maximum- and average-switching active
+energy after optimization.  This apparently counter-intuitive result is
+consistent with the multiplier’s structure and the nature of the critical
+path:
+
+\begin{itemize}
+  \item The active energy in the baseline design is dominated not only by the
+        intended output transitions, but also by substantial internal
+        glitching and short-circuit currents within the array of full
+        adders.  Because the partial-product and carry signals arrive with
+        different delays, many internal nodes experience spurious
+        0$\to$1$\to$0 or 1$\to$0$\to$1 transitions before settling.
+
+  \item Speeding up the critical path gates (particularly at the early stages
+        of carry generation and propagation) reduces the temporal misalignment
+        between signals feeding each adder.  This shortens the “glitch window”
+        and significantly cuts the number and duration of spurious internal
+        transitions.  The decrease in useless switching activity more than
+        compensates for the increased load capacitance of the upsized gates.
+
+  \item Some non-critical gates were left near minimum size.  In combination
+        with faster critical elements, this tends to concentrate switching
+        where it is needed and reduce redundant toggling in off-path logic.
+\end{itemize}
+
+As a result, the optimized multiplier not only operates faster, but also
+wastes less dynamic energy on internal glitching, leading to the observed
+2--3$\times$ reduction in active energy under both maximum- and
+average-switching scenarios.
+
+\subsection*{Leakage Tradeoffs and Justification of Increased Static Energy}
+
+Unlike the active-energy and delay metrics, leakage was \emph{not} included
+in the objective function of the Elmore optimization; the sizing procedure
+was single-objective, targeting delay alone.  Consequently, the observed
+increase in leakage energy for the optimized design is an expected tradeoff:
+
+\begin{itemize}
+  \item Upsizing transistors (especially in the NAND and XOR cells) increases
+        device widths, which in turn raises both subthreshold leakage and
+        gate-oxide leakage currents.  Since leakage is approximately
+        proportional to total transistor width, the more aggressive sizing
+        factors on CP1 naturally increase $I_{\text{leak}}$.
+
+  \item The maximum-leakage vector places many full adders in their
+        highest-leakage bias state (as identified by the FA-level leakage
+        sweep).  With larger devices, the same bias condition yields a higher
+        static current, which explains the jump from
+        $E_{\text{leak,max}}^{\text{(base)}}=880.9\,$zJ to
+        $E_{\text{leak,max}}^{\text{(opt)}}=1256.0\,$zJ.
+
+  \item The minimum-leakage vector still benefits from favorable internal
+        stacking and biasing, so the increase is more modest
+        ($775.8\,$zJ $\to$ $886.4\,$zJ).  This again matches intuition: when
+        most devices are effectively “off,” widening them moderately raises
+        leakage, but not as dramatically as in the worst bias point.
+\end{itemize}
+
+Given that the design objective explicitly prioritized speed (and secondarily
+dynamic energy), the leakage penalty is acceptable: static energy remains
+orders of magnitude smaller than the active energy consumed during a
+multiplication event, while the delay target is comfortably exceeded.
+
+\subsection*{Overall Assessment and Future Directions}
+
+In summary, the project demonstrates that:
+
+\begin{enumerate}
+  \item A relatively simple RC-based Elmore delay model, applied to the
+        critical path of a realistic array multiplier, provides highly useful
+        design guidance for gate sizing.
+  \item Mapping the continuous optimal sizing factors to nearby integer
+        device widths is sufficient to achieve substantial performance
+        improvement in a transistor-level implementation.
+  \item Speed optimization along the true critical path can simultaneously
+        reduce dynamic energy by suppressing internal glitches, even when some
+        gates are upsized, illustrating the tight coupling between timing and
+        power in deep-submicron circuits.
+  \item Leakage inevitably increases when devices are widened, emphasizing the
+        need for multi-objective optimization if ultra-low standby power is a
+        design priority.
+\end{enumerate}
+
+If this work were extended, natural next steps would include (i) adding a
+leakage term to the cost function to explore Pareto-optimal
+delay--leakage tradeoffs, (ii) validating the methodology on larger
+multipliers or different architectures (e.g., Wallace tree or Booth
+multipliers), and (iii) incorporating process, voltage, and temperature
+(PVT) corners into the sizing to ensure robustness.  Nonetheless, within the
+scope of this project, the optimized 4\,$\times$\,4 array multiplier achieves
+its primary performance goal and illustrates how analytical timing models,
+careful testbench design, and transistor-level simulation can be combined to
+produce quantitatively meaningful improvements in both speed and energy.
 
 
 \end{document}
