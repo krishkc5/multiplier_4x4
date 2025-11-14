@@ -1152,16 +1152,95 @@ discussed in later sections.
 % ----------------------------------------------------
 \section{Optimized Delay Measurement}
 
-Delay Measurement Simulation
+\subsection{Worst-Case Delay Test Schematic}
+
+To evaluate the delay improvement achieved by the analytically optimized gate
+sizes, we constructed a transient testbench identical to that used for the
+baseline multiplier. The same worst-case input pattern was applied, ensuring a
+direct comparison between the original and optimized designs. As before, the
+delay was measured on the critical output bit $Z_7$ in response to a
+worst-case rising and falling transition on the most delay-sensitive input bit.
+
+It is important to note that, in the optimized simulation deck, the input
+bit-ordering was inadvertently reversed from $(X_0, X_1, X_2, X_3)$ to
+$(X_3, X_2, X_1, X_0)$. Since the worst-case delay only depends on which single
+input produces the longest carry-propagation path (and not on its label), this
+reversal does not affect which transition produces the critical-path delay. The
+measurement procedure and resulting delays remain valid and fully comparable to
+the baseline case.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\linewidth]{writeup//figures/optimized_delay_ADEL.png}
-    \caption{Enter Caption}
+    \includegraphics[width=0.75\linewidth]{writeup/figures/optimized_delay_ADEL.png}
+    \caption{Optimized worst-case delay testbench.}
     \label{fig:optimized_delay_ADEL}
 \end{figure}
 
 \newpage
+
+\subsection{Worst-Case Delay Analysis}
+
+The optimized device sizes were taken as the nearest-integer realization of the
+analytical Elmore-delay solution. A transient simulation was then run using the
+same worst-case input condition as in the baseline delay measurement.
+
+Figure~\ref{fig:optimized_delay_signals} shows the $50\%$ crossings used to
+extract the delays. For the rising transition (low $\rightarrow$ high), the
+measured crossing times were
+\[
+t^{\uparrow}_{X_3,50\%} = 10.05656~\text{ns}, \qquad
+t^{\uparrow}_{Z_7,50\%} = 10.18194~\text{ns},
+\]
+giving
+\[
+t_{pLH}^{(\text{opt})}
+  = 10.18194 - 10.05656
+  = 0.12538~\text{ns}
+  \approx 125.4~\text{ps}.
+\]
+
+For the falling transition (high $\rightarrow$ low), the measurements were
+\[
+t^{\downarrow}_{X_3,50\%} = 15.08647~\text{ns}, \qquad
+t^{\downarrow}_{Z_7,50\%} = 15.14784~\text{ns},
+\]
+yielding
+\[
+t_{pHL}^{(\text{opt})}
+  = 15.14784 - 15.08647
+  = 0.06137~\text{ns}
+  \approx 61.4~\text{ps}.
+\]
+
+Thus, the worst-case delay of the optimized multiplier is
+\[
+t_{p,\text{worst}}^{(\text{opt})}
+  = \max(t_{pLH}^{(\text{opt})},\, t_{pHL}^{(\text{opt})})
+  \approx 125.4~\text{ps}.
+\]
+
+For comparison, the baseline multiplier exhibited a worst-case delay of
+\[
+t_{p,\text{worst}}^{(\text{base})} = 196.637~\text{ps}.
+\]
+The project objective specified a minimum \textbf{25\% reduction} in worst-case
+delay. The optimized design achieves
+\[
+\frac{196.637 - 125.4}{196.637} \approx 36.3\% \text{ reduction},
+\]
+which comfortably exceeds the required performance target. Because the
+first-pass analytical sizing already met and surpassed the delay-reduction
+criterion, no further parametric sweep or numerical optimization was necessary.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.75\linewidth]{writeup/figures/optimized_delay_signals.png}
+    \caption{Optimized delay waveforms and $50\%$ crossing measurements for $Z_7$.}
+    \label{fig:optimized_delay_signals}
+\end{figure}
+
+\newpage
+
 
 % ----------------------------------------------------
 \section{Optimized Active Energy Measurement}
